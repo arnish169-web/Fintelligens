@@ -11,56 +11,40 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
     console.error("Kunne ikke starte Supabase-klient:", err.message);
   }
 } else {
-  console.log("Supabase-nøkler mangler. Kjører uten database-lagring.");
+  console.log("Supabase-nøkler mangler eller er ufullstendige i Environment Variables.");
 }
 
 export async function saveToDatabase(property, analysis) {
-  if (!supabase) return; // Hopper over lagring hvis DB ikke er satt opp
+  if (!supabase) {
+    console.log("Database-lagring hoppet over: Supabase er ikke koblet til.");
+    return;
+  }
 
   try {
     const { data: prop, error: pError } = await supabase
       .from('properties')
-      .upsert({ url: property.url, title: property.title, raw_data: property }, { onConflict: 'url' })
+      .upsert({ 
+        url: property.url, 
+        title: property.title, 
+        raw_data: property 
+      }, { onConflict: 'url' })
       .select()
       .single();
 
     if (pError) throw pError;
 
     if (prop) {
-      await supabase.from('analyses').insert({
+      const { error: aError } = await supabase.from('analyses').insert({
         property_id: prop.id,
         summary: analysis.summary,
         estimated_market_price: analysis.estimated_market_price,
         red_flags: analysis.red_flags,
         investment_score: analysis.investment_score
       });
+      if (aError) throw aError;
+      console.log("Analyse lagret i databasen.");
     }
   } catch (err) {
-    console.error('Database-feil (lagring hoppet over):', err.message);
-  }
-}import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_ANON_KEY || ''
-);
-
-export async function saveToDatabase(property, analysis) {
-  if (!process.env.SUPABASE_URL) return;
-
-  const { data: prop, error: pError } = await supabase
-    .from('properties')
-    .upsert({ url: property.url, title: property.title, raw_data: property }, { onConflict: 'url' })
-    .select()
-    .single();
-
-  if (prop) {
-    await supabase.from('analyses').insert({
-      property_id: prop.id,
-      summary: analysis.summary,
-      estimated_market_price: analysis.estimated_market_price,
-      red_flags: analysis.red_flags,
-      investment_score: analysis.investment_score
-    });
+    console.error('Database-feil:', err.message);
   }
 }
