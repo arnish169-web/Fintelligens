@@ -10,24 +10,32 @@ app.use(express.json());
 
 app.post('/analyze', async (req, res) => {
   const { url } = req.body;
-  
-  // 1. Sjekk om vi har den fra før (tar < 1 sek!)
-  const cached = await getExistingAnalysis(url);
-  if (cached) return res.json(cached);
+  if (!url) return res.status(400).json({ error: 'URL mangler' });
 
   try {
-    // 2. Hvis ikke, gjør den tunge jobben
+    // 1. LYNKJAPP SJEKK: Har vi gjort dette før?
+    const cached = await getExistingAnalysis(url);
+    if (cached) {
+      console.log("🚀 Bruker lagret analyse");
+      return res.json(cached);
+    }
+
+    // 2. Hvis ikke, kjør full analyse
+    console.log("🔍 Ny analyse starter...");
     const propertyData = await extractFinnAd(url);
     const analysis = await analyzeProperty(propertyData);
     
-    // Send svar med en gang (ikke vent på lagring)
+    // Send svar til brukeren med en gang
     res.json({ property: propertyData, analysis });
     
-    // Lagre i bakgrunnen
+    // Lagre til DB i bakgrunnen (brukeren slipper å vente)
     saveToDatabase(propertyData, analysis);
+
   } catch (error) {
-    res.status(500).json({ error: 'Feilet' });
+    console.error('Analyse feilet:', error.message);
+    res.status(500).json({ error: 'Kunne ikke analysere boligen' });
   }
 });
 
-app.listen(process.env.PORT || 3000, '0.0.0.0');
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => console.log(`Server kjører på port ${PORT}`));
