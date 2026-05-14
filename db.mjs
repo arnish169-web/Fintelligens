@@ -1,45 +1,52 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_ANON_KEY || ''
-);
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
 export async function saveToDatabase(property, analysis) {
-  if (!process.env.SUPABASE_URL) {
-    console.log("Database-nøkler mangler.");
+  if (!supabase) {
+    console.log("Database-klient ikke konfigurert.");
     return;
   }
 
   try {
-    // 1. Lagre boligen
+    // 1. Lagre bolig
     const { data: prop, error: pError } = await supabase
       .from('properties')
       .upsert({ 
-        url: property.url || '', 
-        title: property.title || 'Ukjent bolig',
+        url: property.url, 
+        title: property.title,
         raw_data: property 
       }, { onConflict: 'url' })
       .select()
       .single();
 
-    if (pError) throw pError;
+    if (pError) {
+      console.error("Supabase Property Error:", pError.message);
+      return;
+    }
 
-    // 2. Lagre analysen
+    // 2. Lagre analyse
     if (prop) {
       const { error: aError } = await supabase
         .from('analyses')
         .insert({
           property_id: prop.id,
-          summary: analysis.summary || '',
-          estimated_market_price: analysis.estimated_market_price || 0,
-          red_flags: analysis.red_flags || [],
-          investment_score: analysis.investment_score || 0
+          summary: analysis.summary,
+          estimated_market_price: analysis.estimated_market_price,
+          red_flags: analysis.red_flags,
+          investment_score: analysis.investment_score
         });
-      if (aError) throw aError;
-      console.log("✅ Lagret i database!");
+      
+      if (aError) {
+        console.error("Supabase Analysis Error:", aError.message);
+      } else {
+        console.log("✅ Alt lagret suksessfullt!");
+      }
     }
   } catch (err) {
-    console.error('❌ Database-feil:', err.message);
+    console.error('Database kræsjet:', err.message);
   }
 }
