@@ -3,16 +3,16 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
 
-const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
+// Vi legger til innstillinger som skrur av Realtime for å unngå WebSocket-feilen
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey, {
+  auth: { persistSession: false },
+  realtime: { params: { eventsPerSecond: 0 } }
+}) : null;
 
 export async function saveToDatabase(property, analysis) {
-  if (!supabase) {
-    console.log("Database-klient ikke konfigurert.");
-    return;
-  }
+  if (!supabase) return;
 
   try {
-    // 1. Lagre bolig
     const { data: prop, error: pError } = await supabase
       .from('properties')
       .upsert({ 
@@ -23,30 +23,17 @@ export async function saveToDatabase(property, analysis) {
       .select()
       .single();
 
-    if (pError) {
-      console.error("Supabase Property Error:", pError.message);
-      return;
-    }
-
-    // 2. Lagre analyse
     if (prop) {
-      const { error: aError } = await supabase
-        .from('analyses')
-        .insert({
-          property_id: prop.id,
-          summary: analysis.summary,
-          estimated_market_price: analysis.estimated_market_price,
-          red_flags: analysis.red_flags,
-          investment_score: analysis.investment_score
-        });
-      
-      if (aError) {
-        console.error("Supabase Analysis Error:", aError.message);
-      } else {
-        console.log("✅ Alt lagret suksessfullt!");
-      }
+      await supabase.from('analyses').insert({
+        property_id: prop.id,
+        summary: analysis.summary,
+        estimated_market_price: analysis.estimated_market_price,
+        red_flags: analysis.red_flags,
+        investment_score: analysis.investment_score
+      });
+      console.log("✅ Lagret i Supabase!");
     }
   } catch (err) {
-    console.error('Database kræsjet:', err.message);
+    console.error('Database-feil:', err.message);
   }
 }
