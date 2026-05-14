@@ -5,27 +5,43 @@ export async function extractFinnAd(url) {
   const page = await browser.newPage();
   
   try {
-    console.log("🕸️ Skraper Finn.no...");
+    console.log("🕸️ Starter smart skraping av Finn.no...");
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     
-    // Lukker cookie-boks hvis den dukker opp
+    // Lukker cookie-boks
     try {
       const cookieButton = page.locator('button:has-text("Godta alle"), button:has-text("OK")');
       if (await cookieButton.isVisible()) await cookieButton.click();
     } catch (e) {}
 
+    // SMART AREAL-SJEKK: Vi leter etter alle mulige merkelapper Finn bruker
+    const areaLabels = ["Bruksareal", "Internt bruksareal", "P-rom", "Primærrom", "BRA", "BRA-i"];
+    let foundArea = "0";
+
+    for (const label of areaLabels) {
+      try {
+        // Vi leter etter en merkelapp (dt) som inneholder ordet, og henter verdien (dd) ved siden av
+        const text = await page.locator(`dt:has-text("${label}") + dd`).first().innerText();
+        if (text && text.length > 0) {
+          foundArea = text.replace(/[^0-9]/g, ''); // Beholder bare tallene
+          if (parseInt(foundArea) > 0) {
+            console.log(`✅ Fant areal (${label}): ${foundArea} m²`);
+            break; // Vi fant det!
+          }
+        }
+      } catch (e) {}
+    }
+
     const data = {
       url: url,
       title: await page.locator('h1').first().innerText().catch(() => 'Boligannonse'),
-      price_asking: await extractValue(page, ["Prisantydning", "Totalpris"]),
+      price_asking: await extractValue(page, ["Prisantydning", "Totalpris", "Pris"]),
       total_price: await extractValue(page, ["Totalpris", "Prisantydning"]),
-      area: await extractValue(page, ["Bruksareal", "Primærrom", "m²"]),
+      area: foundArea,
       type: await extractSpec(page, "Boligtype"),
-      description: await page.locator('section[aria-label="Beskrivelse"], .import-decoration').innerText().catch(() => ''),
-      images: []
+      description: await page.locator('section[aria-label="Beskrivelse"], .import-decoration, #description').innerText().catch(() => ''),
     };
 
-    console.log(`📊 Funnet data: ${data.title}, Pris: ${data.total_price}, Areal: ${data.area}`);
     return data;
   } finally {
     await browser.close();
