@@ -1,50 +1,57 @@
 import { createClient } from '@supabase/supabase-js';
 
-let supabase = null;
-
-// Sjekker om vi har de nødvendige nøklene før vi starter
-if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-  try {
-    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-    console.log("Supabase-klient initialisert.");
-  } catch (err) {
-    console.error("Kunne ikke starte Supabase-klient:", err.message);
-  }
-} else {
-  console.log("Supabase-nøkler mangler eller er ufullstendige i Environment Variables.");
-}
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_ANON_KEY || ''
+);
 
 export async function saveToDatabase(property, analysis) {
-  if (!supabase) {
-    console.log("Database-lagring hoppet over: Supabase er ikke koblet til.");
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    console.log("⚠️ Database-nøkler mangler i Render Environment!");
     return;
   }
 
   try {
+    console.log("💾 Prøver å lagre bolig i database...");
+    
+    // 1. Lagre eller oppdater boligen
     const { data: prop, error: pError } = await supabase
       .from('properties')
       .upsert({ 
         url: property.url, 
-        title: property.title, 
+        title: property.title,
+        price_asking: property.price_asking,
+        area_total: parseFloat(property.area) || 0,
         raw_data: property 
       }, { onConflict: 'url' })
       .select()
       .single();
 
-    if (pError) throw pError;
+    if (pError) {
+      console.error("❌ Feil ved lagring av property:", pError.message);
+      return;
+    }
 
+    // 2. Lagre analysen koblet til boligen
     if (prop) {
-      const { error: aError } = await supabase.from('analyses').insert({
-        property_id: prop.id,
-        summary: analysis.summary,
-        estimated_market_price: analysis.estimated_market_price,
-        red_flags: analysis.red_flags,
-        investment_score: analysis.investment_score
-      });
-      if (aError) throw aError;
-      console.log("Analyse lagret i databasen.");
+      const { error: aError } = await supabase
+        .from('analyses')
+        .insert({
+          property_id: prop.id,
+          summary: analysis.summary,
+          estimated_market_price: analysis.estimated_market_price,
+          red_flags: analysis.red_flags,
+          investment_score: analysis.investment_score,
+          bidding_strategy: analysis.suggested_bid_strategy || ""
+        });
+
+      if (aError) {
+        console.error("❌ Feil ved lagring av analyse:", aError.message);
+      } else {
+        console.log("✅ Alt lagret i Supabase!");
+      }
     }
   } catch (err) {
-    console.error('Database-feil:', err.message);
+    console.error('💥 Uventet feil i db.mjs:', err.message);
   }
 }
