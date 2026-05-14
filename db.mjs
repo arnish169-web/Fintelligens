@@ -6,52 +6,40 @@ const supabase = createClient(
 );
 
 export async function saveToDatabase(property, analysis) {
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-    console.log("⚠️ Database-nøkler mangler i Render Environment!");
+  if (!process.env.SUPABASE_URL) {
+    console.log("Database-nøkler mangler.");
     return;
   }
 
   try {
-    console.log("💾 Prøver å lagre bolig i database...");
-    
-    // 1. Lagre eller oppdater boligen
+    // 1. Lagre boligen
     const { data: prop, error: pError } = await supabase
       .from('properties')
       .upsert({ 
-        url: property.url, 
-        title: property.title,
-        price_asking: property.price_asking,
-        area_total: parseFloat(property.area) || 0,
+        url: property.url || '', 
+        title: property.title || 'Ukjent bolig',
         raw_data: property 
       }, { onConflict: 'url' })
       .select()
       .single();
 
-    if (pError) {
-      console.error("❌ Feil ved lagring av property:", pError.message);
-      return;
-    }
+    if (pError) throw pError;
 
-    // 2. Lagre analysen koblet til boligen
+    // 2. Lagre analysen
     if (prop) {
       const { error: aError } = await supabase
         .from('analyses')
         .insert({
           property_id: prop.id,
-          summary: analysis.summary,
-          estimated_market_price: analysis.estimated_market_price,
-          red_flags: analysis.red_flags,
-          investment_score: analysis.investment_score,
-          bidding_strategy: analysis.suggested_bid_strategy || ""
+          summary: analysis.summary || '',
+          estimated_market_price: analysis.estimated_market_price || 0,
+          red_flags: analysis.red_flags || [],
+          investment_score: analysis.investment_score || 0
         });
-
-      if (aError) {
-        console.error("❌ Feil ved lagring av analyse:", aError.message);
-      } else {
-        console.log("✅ Alt lagret i Supabase!");
-      }
+      if (aError) throw aError;
+      console.log("✅ Lagret i database!");
     }
   } catch (err) {
-    console.error('💥 Uventet feil i db.mjs:', err.message);
+    console.error('❌ Database-feil:', err.message);
   }
 }
