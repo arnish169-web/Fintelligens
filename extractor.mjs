@@ -5,33 +5,47 @@ export async function extractFinnAd(url) {
   const page = await browser.newPage();
   
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    console.log("🕸️ Skraper Finn.no...");
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     
-    // Håndter cookie-samtykke
-    const cookieButton = await page.getByRole('button', { name: /Godta alle/i }).or(page.getByRole('button', { name: /OK/i }));
-    if (await cookieButton.isVisible()) await cookieButton.click();
+    // Lukker cookie-boks hvis den dukker opp
+    try {
+      const cookieButton = page.locator('button:has-text("Godta alle"), button:has-text("OK")');
+      if (await cookieButton.isVisible()) await cookieButton.click();
+    } catch (e) {}
 
     const data = {
-      title: await page.locator('h1').first().innerText().catch(() => 'Ingen tittel'),
-      price_asking: await extractPrice(page, 'Prisantydning'),
-      total_price: await extractPrice(page, 'Totalpris'),
-      area: await extractSpec(page, 'Bruksareal'),
-      type: await extractSpec(page, 'Boligtype'),
-      description: await page.locator('section[aria-label="Beskrivelse"]').innerText().catch(() => ''),
-      images: await page.locator('img[src*="finncdn"]').evaluateAll(imgs => imgs.map(img => img.src).slice(0, 5))
+      url: url,
+      title: await page.locator('h1').first().innerText().catch(() => 'Boligannonse'),
+      price_asking: await extractValue(page, ["Prisantydning", "Totalpris"]),
+      total_price: await extractValue(page, ["Totalpris", "Prisantydning"]),
+      area: await extractValue(page, ["Bruksareal", "Primærrom", "m²"]),
+      type: await extractSpec(page, "Boligtype"),
+      description: await page.locator('section[aria-label="Beskrivelse"], .import-decoration').innerText().catch(() => ''),
+      images: []
     };
 
+    console.log(`📊 Funnet data: ${data.title}, Pris: ${data.total_price}, Areal: ${data.area}`);
     return data;
   } finally {
     await browser.close();
   }
 }
 
-async function extractPrice(page, label) {
-  const text = await page.locator(`dt:has-text("${label}") + dd`).innerText().catch(() => '0');
-  return parseFloat(text.replace(/[^0-9]/g, '')) || 0;
+async function extractValue(page, labels) {
+  for (const label of labels) {
+    try {
+      const text = await page.locator(`dt:has-text("${label}") + dd`).first().innerText();
+      if (text) return text.replace(/[^0-9]/g, '');
+    } catch (e) {}
+  }
+  return "0";
 }
 
 async function extractSpec(page, label) {
-  return await page.locator(`dt:has-text("${label}") + dd`).innerText().catch(() => 'Ikke oppgitt');
+  try {
+    return await page.locator(`dt:has-text("${label}") + dd`).first().innerText();
+  } catch (e) {
+    return "Ikke oppgitt";
+  }
 }
