@@ -2,27 +2,32 @@ import express from 'express';
 import cors from 'cors';
 import { extractFinnAd } from './extractor.mjs';
 import { analyzeProperty } from './ai_analyzer.mjs';
-import { saveToDatabase } from './db.mjs';
+import { saveToDatabase, getExistingAnalysis } from './db.mjs';
 
 const app = express();
-app.use(cors()); // Dette åpner døren for Chrome-utvidelsen din
+app.use(cors());
 app.use(express.json());
 
 app.post('/analyze', async (req, res) => {
   const { url } = req.body;
-  if (!url) return res.status(400).json({ error: 'URL is required' });
+  
+  // 1. Sjekk om vi har den fra før (tar < 1 sek!)
+  const cached = await getExistingAnalysis(url);
+  if (cached) return res.json(cached);
 
   try {
-    console.log(`Analyzing: ${url}`);
+    // 2. Hvis ikke, gjør den tunge jobben
     const propertyData = await extractFinnAd(url);
     const analysis = await analyzeProperty(propertyData);
-    await saveToDatabase(propertyData, analysis);
+    
+    // Send svar med en gang (ikke vent på lagring)
     res.json({ property: propertyData, analysis });
+    
+    // Lagre i bakgrunnen
+    saveToDatabase(propertyData, analysis);
   } catch (error) {
-    console.error('Analysis failed:', error);
-    res.status(500).json({ error: 'Failed to analyze property' });
+    res.status(500).json({ error: 'Feilet' });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
+app.listen(process.env.PORT || 3000, '0.0.0.0');
