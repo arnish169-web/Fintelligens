@@ -1,27 +1,38 @@
 import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+const supabase = createClient(
+  process.env.SUPABASE_URL || '',
+  process.env.SUPABASE_ANON_KEY || '',
+  {
+    auth: { persistSession: false },
+    global: { fetch: (...args) => fetch(...args) }
+  }
+);
 
-// Vi legger til innstillinger som skrur av Realtime for å unngå WebSocket-feilen
-const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey, {
-  auth: { persistSession: false },
-  realtime: { params: { eventsPerSecond: 0 } }
-}) : null;
+// Funksjon for å sjekke om vi allerede har analysert boligen (HURTIG-MODUS)
+export async function getExistingAnalysis(url) {
+  try {
+    const { data, error } = await supabase
+      .from('properties')
+      .select('*, analyses(*)')
+      .eq('url', url)
+      .single();
+    
+    if (data && data.analyses && data.analyses.length > 0) {
+      console.log("🚀 Fant lagret analyse – hopper over skraping!");
+      return { property: data, analysis: data.analyses[0] };
+    }
+  } catch (e) {}
+  return null;
+}
 
 export async function saveToDatabase(property, analysis) {
-  if (!supabase) return;
-
   try {
-    const { data: prop, error: pError } = await supabase
+    const { data: prop } = await supabase
       .from('properties')
-      .upsert({ 
-        url: property.url, 
-        title: property.title,
-        raw_data: property 
-      }, { onConflict: 'url' })
-      .select()
-      .single();
+      .upsert({ url: property.url, title: property.title, raw_data: property }, { onConflict: 'url' })
+      .select().single();
 
     if (prop) {
       await supabase.from('analyses').insert({
@@ -31,9 +42,6 @@ export async function saveToDatabase(property, analysis) {
         red_flags: analysis.red_flags,
         investment_score: analysis.investment_score
       });
-      console.log("✅ Lagret i Supabase!");
     }
-  } catch (err) {
-    console.error('Database-feil:', err.message);
-  }
+  } catch (err) { console.error('DB lagring feilet:', err.message); }
 }
