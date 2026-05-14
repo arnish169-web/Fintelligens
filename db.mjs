@@ -5,25 +5,29 @@ const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_ANON_KEY || '',
   {
-    auth: { persistSession: false },
-    global: { fetch: (...args) => fetch(...args) }
+    realtime: {
+      transport: ws
+    },
+    auth: {
+      persistSession: false
+    }
   }
 );
 
-// Funksjon for å sjekke om vi allerede har analysert boligen (HURTIG-MODUS)
 export async function getExistingAnalysis(url) {
   try {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('properties')
       .select('*, analyses(*)')
       .eq('url', url)
-      .single();
+      .maybeSingle();
     
     if (data && data.analyses && data.analyses.length > 0) {
-      console.log("🚀 Fant lagret analyse – hopper over skraping!");
       return { property: data, analysis: data.analyses[0] };
     }
-  } catch (e) {}
+  } catch (e) {
+    console.error("Cache-sjekk feilet:", e.message);
+  }
   return null;
 }
 
@@ -31,7 +35,11 @@ export async function saveToDatabase(property, analysis) {
   try {
     const { data: prop } = await supabase
       .from('properties')
-      .upsert({ url: property.url, title: property.title, raw_data: property }, { onConflict: 'url' })
+      .upsert({ 
+        url: property.url, 
+        title: property.title, 
+        raw_data: property 
+      }, { onConflict: 'url' })
       .select().single();
 
     if (prop) {
@@ -42,6 +50,9 @@ export async function saveToDatabase(property, analysis) {
         red_flags: analysis.red_flags,
         investment_score: analysis.investment_score
       });
+      console.log("✅ Lagret i database");
     }
-  } catch (err) { console.error('DB lagring feilet:', err.message); }
+  } catch (err) {
+    console.error('DB-lagring feilet:', err.message);
+  }
 }
