@@ -1,9 +1,11 @@
 import express from 'express';
+import cors from 'cors'; // NY LINJE 1
 import { extractFinnAd } from './extractor.mjs';
 import { analyzeProperty } from './ai_analyzer.mjs';
 import { saveToDatabase } from './db.mjs';
 
 const app = express();
+app.use(cors()); // NY LINJE 2 - Tillater utvidelsen å snakke med serveren
 app.use(express.json());
 
 app.post('/analyze', async (req, res) => {
@@ -31,4 +33,5 @@ app.post('/analyze', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// NY LINJE 3 - Lagt til '0.0.0.0' for bedre kompabilitet med Render
+app.listen(PORT, '0.0.0.0', () => console.log(`Server running on port ${PORT}`));
