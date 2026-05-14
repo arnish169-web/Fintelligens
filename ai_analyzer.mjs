@@ -8,17 +8,22 @@ export async function analyzeProperty(data) {
     const prompt = `Du er en norsk eiendomsekspert. Analyser denne boligen:
       Tittel: ${data.title}
       Adresse: ${data.address}
-      Pris: ${data.total_price} kr
+      Totalpris: ${data.total_price} kr
       Areal: ${data.area} m2
+      Nabolagshistorikk: ${data.neighborhood_history}
       Beskrivelse: ${data.description}
+      
+      OPPGAVE: 
+      1. Vurder om prisen er god sammenlignet med nabolagshistorikken.
+      2. Gi en konkret budstrategi (f.eks "By 200k under").
       
       Svar med JSON: 
       { 
-        "summary": "kort oppsummering", 
+        "summary": "kort vurdering", 
         "estimated_market_price": tall, 
-        "red_flags": ["flagg 1"], 
+        "red_flags": ["flagg"], 
         "investment_score": 0-100,
-        "suggested_bid_strategy": "Konkret budtips basert på dataene"
+        "suggested_bid_strategy": "Veldig spesifikk strategi basert på pris og historikk"
       }`;
 
     const response = await openai.chat.completions.create({
@@ -34,11 +39,5 @@ export async function analyzeProperty(data) {
 }
 
 function mockAnalysis(data) {
-  return { 
-    summary: "Test", 
-    estimated_market_price: data.total_price || 5000000, 
-    red_flags: ["Sjekk fellesgjeld"], 
-    investment_score: 70,
-    suggested_bid_strategy: "By 5% under prisantydning."
-  };
+  return { summary: "Test", estimated_market_price: 5000000, red_flags: [], investment_score: 70, suggested_bid_strategy: "By under." };
 }
