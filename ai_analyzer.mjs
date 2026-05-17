@@ -4,27 +4,23 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 export async function analyzeProperty(data) {
   if (process.env.USE_REAL_AI !== 'true') return mockAnalysis(data);
 
-  const prompt = `Du er en norsk byggsakkyndig og eiendomsanalytiker. 
-  Analyser denne boligen med fokus på tilstand:
+  const prompt = `Du er en norsk eiendomsekspert. 
+  Analyser denne boligen og gi en komplett vurdering.
   
   DATA:
   Tittel: ${data.title}
-  TG-status: ${data.tg_summary}
+  TG-Telling: TG1: ${data.tg_counts.tg1}, TG2: ${data.tg_counts.tg2}, TG3: ${data.tg_counts.tg3}
   Beskrivelse: ${data.description}
   Totalpris: ${data.total_price} kr
 
-  OPPGAVE:
-  1. Hvis det er TG3, er dette kritiske feil (røde flagg).
-  2. Hvis det er mange TG2, vurder om prisen bør prutes ned.
-  3. Gi en investeringsscore basert på forholdet mellom pris og teknisk tilstand.
-
   Svar med JSON:
   {
-    "summary": "kort teknisk vurdering",
+    "summary": "kort oppsummering",
     "estimated_market_price": tall,
-    "red_flags": ["spesifikk TG-feil her"],
+    "red_flags": ["flagg"],
     "investment_score": 0-100,
-    "suggested_bid_strategy": "strategi basert på TG-feilene"
+    "suggested_bid_strategy": "detaljert strategi",
+    "tg_report": { "tg1": ${data.tg_counts.tg1}, "tg2": ${data.tg_counts.tg2}, "tg3": ${data.tg_counts.tg3} }
   }`;
 
   const response = await openai.chat.completions.create({
