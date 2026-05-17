@@ -7,14 +7,22 @@ export async function extractFinnAd(url) {
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     
-    // Grunnleggende data
+    // Finn adresse og beskrivelse
     const address = await page.locator('h1 + p, [data-testid="ad-location"]').first().innerText().catch(() => '');
     const description = await page.locator('section[aria-label="Beskrivelse"]').innerText().catch(() => '');
     const pageContent = await page.content();
 
-    // TG-SJEKK (Søker etter Tilstandsgrader i hele teksten)
-    const tg2_count = (pageContent.match(/TG\s?2|Tilstandsgrad\s?2/gi) || []).length;
-    const tg3_count = (pageContent.match(/TG\s?3|Tilstandsgrad\s?3/gi) || []).length;
+    // NØYAKTIG TELLING AV TG (Regex som fanger TG1, TG 1, Tilstandsgrad 1 osv)
+    const countTG = (grade) => {
+      const regex = new RegExp(`(TG|Tilstandsgrad)\\s?${grade}`, 'gi');
+      return (pageContent.match(regex) || []).length;
+    };
+
+    const tgData = {
+      tg1: countTG(1),
+      tg2: countTG(2),
+      tg3: countTG(3)
+    };
 
     const data = {
       url,
@@ -23,7 +31,7 @@ export async function extractFinnAd(url) {
       total_price: await extractValue(page, ["Totalpris", "Prisantydning"]),
       area: await extractValue(page, ["Bruksareal", "Primærrom"]),
       description: description,
-      tg_summary: `Funnet ${tg2_count} stk TG2 og ${tg3_count} stk TG3 i annonsen.`
+      tg_counts: tgData // Sender tallene til AI-en
     };
 
     return data;
